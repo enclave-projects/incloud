@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import FormInput from "@/components/ui/FormInput";
 
 /* ── Icon helpers ─────────────────────────────────────── */
@@ -64,6 +65,7 @@ function validate(email: string, password: string): FormErrors {
 
 /* ── Component ────────────────────────────────────────── */
 export default function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
@@ -83,6 +85,7 @@ export default function LoginForm() {
     await new Promise((r) => setTimeout(r, 1400));
     setIsLoading(false);
     setSubmitted(true);
+    router.push("/dashboard");
   };
 
   if (submitted) {

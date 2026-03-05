@@ -85,7 +85,55 @@ body {
 .animate-fade-up      { animation: fade-up      0.55s ease-out   both;     }
 .animate-spin         { animation: spin         0.8s  linear      infinite; }
 
-/* ── Scrollbar ── */
+/* ── Dashboard Dark Theme Tokens ── */
+:root {
+  --dash-bg:           #08111f;
+  --dash-sidebar:      #040c18;
+  --dash-surface:      #0d1828;
+  --dash-surface-2:    #182540;
+  --dash-border:       rgba(255, 255, 255, 0.065);
+  --dash-border-lg:    rgba(255, 255, 255, 0.10);
+  --dash-text:         #dde8fa;
+  --dash-text-2:       #7b9abf;
+  --dash-text-3:       #3d5a7e;
+  --dash-accent:       #3b82f6;
+  --dash-accent-dim:   rgba(59, 130, 246, 0.12);
+  --dash-accent-hover: rgba(59, 130, 246, 0.2);
+}
+
+/* ── Dashboard Scrollbar ── */
+.dash-scroll::-webkit-scrollbar       { width: 4px; }
+.dash-scroll::-webkit-scrollbar-track { background: transparent; }
+.dash-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+/* ── File type category colors ── */
+:root {
+  --ft-video:    #a78bfa;
+  --ft-video-bg: rgba(167,139,250,0.12);
+  --ft-image:    #22d3ee;
+  --ft-image-bg: rgba(34,211,238,0.12);
+  --ft-audio:    #fb923c;
+  --ft-audio-bg: rgba(251,146,60,0.12);
+  --ft-3d:       #4ade80;
+  --ft-3d-bg:    rgba(74,222,128,0.12);
+  --ft-doc:      #60a5fa;
+  --ft-doc-bg:   rgba(96,165,250,0.12);
+  --ft-archive:  #fbbf24;
+  --ft-arc-bg:   rgba(251,191,36,0.12);
+  --ft-lut:      #f9a8d4;
+  --ft-lut-bg:   rgba(249,168,212,0.12);
+  --ft-unk:      #64748b;
+  --ft-unk-bg:   rgba(100,116,139,0.12);
+}
+
+/* ── Animations (dashboard) ── */
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+.animate-slide-in { animation: slide-in-left 0.2s ease-out both; }
+
+/* ── Scrollbar (global) ── */
 ::-webkit-scrollbar       { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--ic-border); border-radius: 4px; }
