@@ -18,7 +18,9 @@
   --ic-border-hover: #CBD5E1;
   --ic-border-focus: #2563EB;
 
-  /* Typography */
+  /* Typography — served from @fontsource-variable npm packages (offline-safe) */
+  --font-outfit:   'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  --font-dm-sans:  'DM Sans Variable', 'DM Sans', system-ui, sans-serif;
   --font-display: var(--font-outfit);
   --font-body:    var(--font-dm-sans);
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FormInput from "@/components/ui/FormInput";
+import { loginUser } from "@/lib/auth";
 
 /* ── Icon helpers ─────────────────────────────────────── */
 function EmailIcon() {
@@ -81,11 +82,31 @@ export default function LoginForm() {
     }
     setErrors({});
     setIsLoading(true);
-    // TODO: wire up Appwrite/auth provider here
-    await new Promise((r) => setTimeout(r, 1400));
-    setIsLoading(false);
-    setSubmitted(true);
-    router.push("/dashboard");
+    try {
+      await loginUser(email, password);
+      setSubmitted(true);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const appErr = err as { code?: number; message?: string; type?: string };
+      if (
+        appErr.code === 401 ||
+        appErr.type === "user_invalid_credentials" ||
+        appErr.type === "user_session_not_found"
+      ) {
+        setErrors({ email: "Invalid email or password." });
+      } else if (appErr.code === 404) {
+        setErrors({ email: "No account found with this email." });
+      } else if (appErr.code === 429) {
+        setErrors({ email: "Too many attempts. Please wait and try again." });
+      } else {
+        console.error("Login error:", appErr);
+        setErrors({
+          email: appErr.message || "Something went wrong. Please try again.",
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (submitted) {

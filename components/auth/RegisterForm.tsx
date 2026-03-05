@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import FormInput from "@/components/ui/FormInput";
+import { registerUser } from "@/lib/auth";
 
 /* ── Icon helpers ─────────────────────────────────────── */
 function UserIcon() {
@@ -114,6 +116,7 @@ function validate(
 
 /* ── Component ────────────────────────────────────────── */
 export default function RegisterForm() {
+  const router = useRouter();
   const [name, setName]                       = useState("");
   const [email, setEmail]                     = useState("");
   const [password, setPassword]               = useState("");
@@ -138,10 +141,25 @@ export default function RegisterForm() {
     if (hasFormErrors || hasTermsError) return;
 
     setIsLoading(true);
-    // TODO: wire up Appwrite/auth provider here
-    await new Promise((r) => setTimeout(r, 1600));
-    setIsLoading(false);
-    setSubmitted(true);
+    try {
+      await registerUser(name, email, password);
+      setSubmitted(true);
+      setTimeout(() => router.push("/dashboard"), 1500);
+    } catch (err: unknown) {
+      const appErr = err as { code?: number; message?: string; type?: string };
+      if (appErr.code === 409 || appErr.type === "user_already_exists") {
+        setErrors({ email: "An account with this email already exists." });
+      } else if (appErr.code === 429) {
+        setErrors({ email: "Too many attempts. Please wait and try again." });
+      } else {
+        console.error("Registration error:", appErr);
+        setErrors({
+          email: appErr.message || "Registration failed. Please try again.",
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (submitted) {

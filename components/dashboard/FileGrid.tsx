@@ -3,7 +3,6 @@
 import { useState } from "react";
 import FileCard from "@/components/dashboard/FileCard";
 import type { VaultFile } from "@/lib/mock-data";
-import "./FileGrid.css";
 
 type SortKey = "name" | "size" | "date";
 
