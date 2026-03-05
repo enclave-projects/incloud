@@ -116,6 +116,7 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
         className="hidden"
         onChange={(e) => simulateUpload(e.target.files)}
         accept=".mp4,.mov,.mkv,.avi,.mxf,.exr,.hdr,.jpg,.jpeg,.png,.tiff,.psd,.ai,.wav,.aiff,.mp3,.flac,.aac,.obj,.fbx,.abc,.glb,.gltf,.blend,.zip,.rar,.7z,.tar,.gz,.cube,.3dl,.look"
+        aria-label="Upload files"
       />
 
       {/* Upload list */}

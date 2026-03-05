@@ -3,6 +3,7 @@
 import { useState } from "react";
 import FileCard from "@/components/dashboard/FileCard";
 import type { VaultFile } from "@/lib/mock-data";
+import "./FileGrid.css";
 
 type SortKey = "name" | "size" | "date";
 
@@ -51,14 +52,10 @@ export default function FileGrid({
           <div className="flex items-center gap-2">
             {/* Sort dropdown */}
             <select
-              className="text-sm rounded-lg px-2 py-1.5 outline-none border"
-              style={{
-                background: "var(--dash-surface)",
-                color: "var(--dash-text-2)",
-                borderColor: "var(--dash-border)",
-              }}
+              className="text-sm rounded-lg px-2 py-1.5 outline-none border sortDropdown"
               value={sort}
               onChange={(e) => toggleSort(e.target.value as SortKey)}
+              aria-label="Sort files by"
             >
               <option value="date">Recent first</option>
               <option value="name">Name</option>
