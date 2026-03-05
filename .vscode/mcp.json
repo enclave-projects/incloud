@@ -1,0 +1,22 @@
+{
+	"servers": {
+		"appwrite-api": {
+			"command": "uvx",
+			"args": [
+				"mcp-server-appwrite",
+				"--all"
+			],
+			"env": {
+				"APPWRITE_PROJECT_ID": "incloud-enclaveprojects",
+				"APPWRITE_API_KEY": "standard_ecdb6b45b77814108864d37a63009d969c7e6e9e809555deae47f6524d2d234b19172c8e3178ad98dd5ec22fdbc827c2acfca3dd54074b8af2ccd6d7ed97b4c14961349a5691c16aeb74e256624340df75417f1dd2417dc350cc2f3c9a61217b6a60f82f5d839139bf3a2dceddf7e46df98167807236a0ee514f22d3fac12a7c",
+				"APPWRITE_ENDPOINT": "https://appwrite.enclaveprojects.dev/v1"
+			},
+			"type": "stdio"
+		},
+		"appwrite-docs": {
+			"url": "https://mcp-for-docs.appwrite.io",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}
