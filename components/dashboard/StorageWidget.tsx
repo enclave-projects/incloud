@@ -1,16 +1,29 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import StorageBar from "@/components/dashboard/StorageBar";
-import { STORAGE_STATS } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { getStorageStats } from "@/lib/storage-stats";
 import { storagePercent, formatBytes } from "@/lib/format";
+import type { StorageStats } from "@/lib/types";
 
 export default function StorageWidget() {
-  const vaultPct  = storagePercent(STORAGE_STATS.vaultUsed,  STORAGE_STATS.vaultTotal);
-  const backupPct = storagePercent(STORAGE_STATS.backupUsed, STORAGE_STATS.backupTotal);
+  const { user } = useAuth();
+  const [stats, setStats] = useState<StorageStats | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    getStorageStats(user.$id).then(setStats).catch(() => {});
+  }, [user]);
+
+  const vaultPct  = stats ? storagePercent(stats.vaultUsed,  stats.vaultTotal) : 0;
+  const backupPct = stats ? storagePercent(stats.backupUsed, stats.backupTotal) : 0;
   const vaultWarn  = vaultPct >= 85;
   const backupWarn = backupPct >= 80;
 
   return (
     <div
-      className="rounded-2xl p-5 flex flex-col gap-5"
+      className="rounded-2xl p-6 flex flex-col gap-6"
       style={{
         background: "var(--dash-surface)",
         border: "1px solid var(--dash-border)",
@@ -36,7 +49,7 @@ export default function StorageWidget() {
         </div>
         <span className="text-xs px-2 py-1 rounded-full"
           style={{ background: "rgba(255,255,255,0.05)", color: "var(--dash-text-2)" }}>
-          {formatBytes(STORAGE_STATS.vaultUsed + STORAGE_STATS.backupUsed)} total
+          {stats ? formatBytes(stats.vaultUsed + stats.backupUsed) : "0 B"} total
         </span>
       </div>
 
@@ -49,8 +62,8 @@ export default function StorageWidget() {
           </span>
         </div>
         <StorageBar
-          used={STORAGE_STATS.vaultUsed}
-          total={STORAGE_STATS.vaultTotal}
+          used={stats?.vaultUsed ?? 0}
+          total={stats?.vaultTotal ?? 1}
           label="In use"
         />
         {vaultWarn && (
@@ -75,8 +88,8 @@ export default function StorageWidget() {
           </span>
         </div>
         <StorageBar
-          used={STORAGE_STATS.backupUsed}
-          total={STORAGE_STATS.backupTotal}
+          used={stats?.backupUsed ?? 0}
+          total={stats?.backupTotal ?? 1}
           label="Backup used"
         />
         {backupWarn && (

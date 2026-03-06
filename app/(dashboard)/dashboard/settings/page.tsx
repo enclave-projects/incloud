@@ -1,6 +1,10 @@
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = { title: "Settings — InCloud" };
+import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { updateUserName, updateUserProfile } from "@/lib/auth";
+import { getUserSettings, updateUserSettings } from "@/lib/settings";
+import type { UserSettings } from "@/lib/types";
 
 interface SettingRow {
   label: string;
@@ -44,24 +48,31 @@ function Section({ title, rows }: { title: string; rows: SettingRow[] }) {
   );
 }
 
-function Toggle({ defaultOn = false }: { defaultOn?: boolean }) {
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div
+    <button
+      type="button"
       className="relative w-10 h-5 rounded-full transition-colors cursor-pointer flex-shrink-0"
-      style={{ background: defaultOn ? "var(--dash-accent)" : "var(--dash-border)" }}
+      style={{ background: on ? "var(--dash-accent)" : "var(--dash-border)" }}
+      onClick={() => onChange(!on)}
+      role="switch"
+      aria-checked={on}
+      aria-label="Toggle"
     >
       <div
         className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-        style={{ transform: defaultOn ? "translateX(21px)" : "translateX(2px)" }}
+        style={{ transform: on ? "translateX(21px)" : "translateX(2px)" }}
       />
-    </div>
+    </button>
   );
 }
 
-function Select({ options, value }: { options: string[]; value: string }) {
+function Select({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
   return (
     <select
-      defaultValue={value}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Select option"
       className="text-sm rounded-xl px-3 py-1.5 outline-none"
       style={{
         background: "var(--dash-surface-2)",
@@ -77,19 +88,72 @@ function Select({ options, value }: { options: string[]; value: string }) {
 }
 
 export default function SettingsPage() {
+  const { user, refresh } = useAuth();
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [nameEditing, setNameEditing] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
+
+  useEffect(() => { if (user) setEditName(user.name || ""); }, [user]);
+
+  const saveName = async () => {
+    if (!user || !editName.trim() || editName.trim() === user.name) {
+      setNameEditing(false);
+      return;
+    }
+    setNameSaving(true);
+    try {
+      await updateUserName(editName.trim());
+      await updateUserProfile(user.$id, { name: editName.trim() }).catch(() => {});
+      await refresh();
+      setNameEditing(false);
+    } catch {} finally { setNameSaving(false); }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    getUserSettings(user.$id).then(setSettings).catch(() => {});
+  }, [user]);
+
+  const save = (patch: Partial<UserSettings>) => {
+    if (!settings) return;
+    const updated = { ...settings, ...patch };
+    setSettings(updated as UserSettings);
+    setSaving(true);
+    updateUserSettings(settings.$id, patch)
+      .then((s) => setSettings(s))
+      .catch(() => {})
+      .finally(() => setSaving(false));
+  };
+
+  if (!settings) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto flex items-center justify-center" style={{ minHeight: 200 }}>
+        <p className="text-sm" style={{ color: "var(--dash-text-3)" }}>Loading settings…</p>
+      </div>
+    );
+  }
   return (
-    <div className="p-6 max-w-2xl mx-auto flex flex-col gap-6">
+    <div className="p-8 max-w-2xl mx-auto flex flex-col gap-8">
       {/* Header */}
-      <div>
-        <h1
-          className="text-xl font-semibold"
-          style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
-        >
-          Settings
-        </h1>
-        <p className="text-xs mt-0.5" style={{ color: "var(--dash-text-3)" }}>
-          Manage your InCloud preferences
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1
+            className="text-2xl font-semibold"
+            style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
+          >
+            Settings
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: "var(--dash-text-3)" }}>
+            Manage your InCloud preferences
+          </p>
+        </div>
+        {saving && (
+          <span className="text-xs px-2 py-1 rounded-lg" style={{ color: "var(--dash-accent)" }}>
+            Saving…
+          </span>
+        )}
       </div>
 
       <Section
@@ -98,31 +162,54 @@ export default function SettingsPage() {
           {
             label: "Display Name",
             description: "Your name shown across the platform",
-            control: (
-              <input
-                defaultValue="Pranjal Sharma"
-                className="text-sm rounded-xl px-3 py-1.5 outline-none w-44"
-                style={{
-                  background: "var(--dash-surface-2)",
-                  color: "var(--dash-text)",
-                  border: "1px solid var(--dash-border)",
-                }}
-              />
+            control: nameEditing ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") { setNameEditing(false); setEditName(user?.name || ""); } }}
+                  className="text-sm rounded-xl px-3 py-1.5 outline-none w-44"
+                  style={{ color: "var(--dash-text)", background: "var(--dash-surface-2)", border: "1px solid var(--dash-accent)" }}
+                  aria-label="Display name"
+                  autoFocus
+                />
+                <button
+                  onClick={saveName}
+                  disabled={nameSaving}
+                  className="text-xs px-3 py-1.5 rounded-xl font-medium transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{ background: "var(--dash-accent)", color: "#fff" }}
+                >
+                  {nameSaving ? "…" : "Save"}
+                </button>
+                <button
+                  onClick={() => { setNameEditing(false); setEditName(user?.name || ""); }}
+                  className="text-xs px-2 py-1.5 rounded-xl"
+                  style={{ color: "var(--dash-text-3)" }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setNameEditing(true)}
+                className="text-sm rounded-xl px-3 py-1.5 transition-colors hover:opacity-80 cursor-pointer"
+                style={{ color: "var(--dash-text)", background: "var(--dash-surface-2)", border: "1px solid var(--dash-border)" }}
+                title="Click to edit"
+              >
+                {user?.name || "—"}
+              </button>
             ),
           },
           {
             label: "Email",
             description: "Used for login and notifications",
             control: (
-              <input
-                defaultValue="pranjal@incloud.local"
-                className="text-sm rounded-xl px-3 py-1.5 outline-none w-44"
-                style={{
-                  background: "var(--dash-surface-2)",
-                  color: "var(--dash-text)",
-                  border: "1px solid var(--dash-border)",
-                }}
-              />
+              <span
+                className="text-sm rounded-xl px-3 py-1.5"
+                style={{ color: "var(--dash-text)", background: "var(--dash-surface-2)", border: "1px solid var(--dash-border)" }}
+              >
+                {user?.email || "—"}
+              </span>
             ),
           },
         ]}
@@ -134,17 +221,23 @@ export default function SettingsPage() {
           {
             label: "Auto-backup new files",
             description: "Automatically mark uploaded files for backup",
-            control: <Toggle />,
+            control: <Toggle on={settings.auto_backup} onChange={(v) => save({ auto_backup: v })} />,
           },
           {
             label: "Compression on upload",
             description: "Losslessly compress compatible files on upload",
-            control: <Toggle />,
+            control: <Toggle on={settings.compression} onChange={(v) => save({ compression: v })} />,
           },
           {
             label: "Storage warning threshold",
             description: "Show warning when vault usage reaches",
-            control: <Select options={["70%", "75%", "80%", "85%", "90%"]} value="80%" />,
+            control: (
+              <Select
+                options={["70", "75", "80", "85", "90"]}
+                value={String(settings.warning_threshold)}
+                onChange={(v) => save({ warning_threshold: parseInt(v, 10) })}
+              />
+            ),
           },
         ]}
       />
@@ -155,12 +248,18 @@ export default function SettingsPage() {
           {
             label: "Video preview quality",
             description: "Resolution for in-browser video previews",
-            control: <Select options={["360p", "480p", "720p", "1080p"]} value="720p" />,
+            control: (
+              <Select
+                options={["360p", "480p", "720p", "1080p"]}
+                value={settings.video_quality}
+                onChange={(v) => save({ video_quality: v })}
+              />
+            ),
           },
           {
             label: "Show EXIF data",
             description: "Display metadata panel in image preview",
-            control: <Toggle defaultOn />,
+            control: <Toggle on={settings.show_exif} onChange={(v) => save({ show_exif: v })} />,
           },
         ]}
       />

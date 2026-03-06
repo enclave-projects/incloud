@@ -139,3 +139,8 @@ body {
 ::-webkit-scrollbar       { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--ic-border); border-radius: 4px; }
+
+/* ── Mobile block ── */
+@media (max-width: 1023px) {
+  .mobile-hidden { display: none !important; }
+}

@@ -1,9 +1,16 @@
 "use client";
 
 import { useRef, useState, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { uploadFile } from "@/lib/files";
+import { recalculateStorage } from "@/lib/storage-stats";
+import { MAX_UPLOAD_SIZE } from "@/lib/config";
 
 interface UploadZoneProps {
   compact?: boolean;
+  folderId?: string;
+  folderPath?: string;
+  onUploadComplete?: () => void;
 }
 
 interface PendingFile {
@@ -12,6 +19,7 @@ interface PendingFile {
   size: number;
   progress: number;
   done: boolean;
+  error?: string;
 }
 
 function formatSize(bytes: number) {
@@ -20,15 +28,19 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function UploadZone({ compact = false }: UploadZoneProps) {
+export default function UploadZone({ compact = false, folderId = "", folderPath = "/", onUploadComplete }: UploadZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState<PendingFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
 
-  const simulateUpload = useCallback((fileList: FileList | null) => {
-    if (!fileList) return;
+  const handleUpload = useCallback(async (fileList: FileList | null) => {
+    if (!fileList || !user) return;
+
+    let hasSuccess = false;
+
     const incoming: PendingFile[] = Array.from(fileList).map((f) => ({
-      id: `${f.name}-${Date.now()}`,
+      id: `${f.name}-${Date.now()}-${Math.random()}`,
       name: f.name,
       size: f.size,
       progress: 0,
@@ -36,30 +48,62 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
     }));
     setFiles((prev) => [...incoming, ...prev]);
 
-    // Simulate progress for each file
-    incoming.forEach((pf) => {
-      let prog = 0;
-      const tick = setInterval(() => {
-        prog += Math.random() * 18 + 4;
-        if (prog >= 100) {
-          prog = 100;
-          clearInterval(tick);
+    const rawFiles = Array.from(fileList);
+
+    for (let i = 0; i < rawFiles.length; i++) {
+      const raw = rawFiles[i];
+      const pf = incoming[i];
+
+      // Validate file size (1 GB limit)
+      if (raw.size > MAX_UPLOAD_SIZE) {
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === pf.id
+              ? { ...f, progress: 0, done: true, error: `File exceeds 1 GB limit (${formatSize(raw.size)})` }
+              : f
+          )
+        );
+        continue;
+      }
+
+      try {
+        await uploadFile(user.$id, raw, folderId, folderPath, [], (percent) => {
           setFiles((prev) =>
-            prev.map((f) => (f.id === pf.id ? { ...f, progress: 100, done: true } : f))
+            prev.map((f) => (f.id === pf.id ? { ...f, progress: Math.max(1, Math.round(percent)) } : f))
           );
-        } else {
-          setFiles((prev) =>
-            prev.map((f) => (f.id === pf.id ? { ...f, progress: Math.round(prog) } : f))
-          );
-        }
-      }, 120);
-    });
-  }, []);
+        });
+
+        setFiles((prev) =>
+          prev.map((f) => (f.id === pf.id ? { ...f, progress: 100, done: true } : f))
+        );
+        hasSuccess = true;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        const friendly = msg.includes("size not allowed")
+          ? "File too large for bucket. Run: node scripts/update-bucket.mjs"
+          : msg.includes("extension not allowed")
+            ? "File type blocked by bucket. Run: node scripts/update-bucket.mjs"
+            : msg;
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === pf.id
+              ? { ...f, progress: 0, done: true, error: friendly }
+              : f
+          )
+        );
+      }
+    }
+
+    if (hasSuccess) {
+      await recalculateStorage(user.$id).catch(() => {});
+      onUploadComplete?.();
+    }
+  }, [user, folderId, folderPath, onUploadComplete]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    simulateUpload(e.dataTransfer.files);
+    handleUpload(e.dataTransfer.files);
   };
 
   const clearDone = () => setFiles((f) => f.filter((x) => !x.done));
@@ -104,7 +148,7 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
           </p>
         )}
         <p className="text-xs mt-1" style={{ color: "var(--dash-text-3)" }}>
-          {compact ? "Click or drop" : "or click to browse · Video, 3D, Image, Audio, LUT, Archive"}
+          {compact ? "Click or drop" : "or click to browse · Any file type · Up to 1 GB"}
         </p>
       </div>
 
@@ -114,8 +158,7 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
         type="file"
         multiple
         className="hidden"
-        onChange={(e) => simulateUpload(e.target.files)}
-        accept=".mp4,.mov,.mkv,.avi,.mxf,.exr,.hdr,.jpg,.jpeg,.png,.tiff,.psd,.ai,.wav,.aiff,.mp3,.flac,.aac,.obj,.fbx,.abc,.glb,.gltf,.blend,.zip,.rar,.7z,.tar,.gz,.cube,.3dl,.look"
+        onChange={(e) => handleUpload(e.target.files)}
         aria-label="Upload files"
       />
 
@@ -146,7 +189,12 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
               <div key={f.id} className="flex items-center gap-3 px-4 py-3">
                 {/* Status icon */}
                 <div className="w-6 h-6 flex items-center justify-center flex-shrink-0">
-                  {f.done ? (
+                  {f.error ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                      stroke="#ef4444" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  ) : f.done ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                       stroke="#34d399" strokeWidth="2.5">
                       <polyline points="20 6 9 17 4 12"/>
@@ -176,12 +224,12 @@ export default function UploadZone({ compact = false }: UploadZoneProps) {
                         className="h-full rounded-full transition-all"
                         style={{
                           width: `${f.progress}%`,
-                          background: f.done ? "#34d399" : "var(--dash-accent)",
+                          background: f.error ? "#ef4444" : f.done ? "#34d399" : "var(--dash-accent)",
                         }}
                       />
                     </div>
                     <span className="text-[11px] flex-shrink-0" style={{ color: "var(--dash-text-3)" }}>
-                      {f.done ? formatSize(f.size) : `${f.progress}%`}
+                      {f.error ? f.error : f.done ? formatSize(f.size) : `${f.progress}%`}
                     </span>
                   </div>
                 </div>

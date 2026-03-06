@@ -1,11 +1,15 @@
-import { STORAGE_STATS, RECENT_FILES, FOLDERS } from "@/lib/mock-data";
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
 import StorageWidget from "@/components/dashboard/StorageWidget";
 import FolderCard from "@/components/dashboard/FolderCard";
-import FileCard from "@/components/dashboard/FileCard";
+import FileManager from "@/components/dashboard/FileManager";
 import Link from "next/link";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = { title: "Dashboard — InCloud" };
+import { useAuth } from "@/lib/auth-context";
+import { listRecentFiles } from "@/lib/files";
+import { listFoldersWithStats } from "@/lib/folders";
+import { getStorageStats } from "@/lib/storage-stats";
+import type { ParsedVaultFile, FolderWithStats, StorageStats } from "@/lib/types";
 
 const QUICK_ACTIONS = [
   {
@@ -49,18 +53,36 @@ const QUICK_ACTIONS = [
 ];
 
 export default function DashboardPage() {
-  const usedPercent = Math.round((STORAGE_STATS.vaultUsed / STORAGE_STATS.vaultTotal) * 100);
+  const { user } = useAuth();
+  const [recentFiles, setRecentFiles] = useState<ParsedVaultFile[]>([]);
+  const [folders, setFolders] = useState<FolderWithStats[]>([]);
+  const [stats, setStats] = useState<StorageStats | null>(null);
+
+  const fetchRecent = useCallback(() => {
+    if (!user) return;
+    listRecentFiles(user.$id, 8).then(setRecentFiles).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchRecent();
+    listFoldersWithStats(user.$id).then(setFolders).catch(() => {});
+    getStorageStats(user.$id).then(setStats).catch(() => {});
+  }, [user, fetchRecent]);
+
+  const usedPercent = stats ? Math.round((stats.vaultUsed / stats.vaultTotal) * 100) : 0;
+  const displayName = user?.name || user?.email?.split("@")[0] || "there";
 
   return (
-    <div className="p-6 max-w-7xl mx-auto flex flex-col gap-8">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-10">
       {/* Welcome header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1
-            className="text-2xl font-semibold leading-tight"
+            className="text-[26px] font-semibold leading-tight"
             style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
           >
-            Welcome back, Pranjal
+            Welcome back, {displayName}
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--dash-text-2)" }}>
             Your vault is at {usedPercent}% capacity. {usedPercent > 80 ? "Consider cleaning up." : ""}
@@ -81,7 +103,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Top row: Storage + Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
           <StorageWidget />
         </div>
@@ -128,9 +150,9 @@ export default function DashboardPage() {
 
       {/* Folders section */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <h2
-            className="text-base font-semibold"
+            className="text-lg font-semibold"
             style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
           >
             Folders
@@ -143,18 +165,18 @@ export default function DashboardPage() {
             View all →
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-          {FOLDERS.map((folder) => (
-            <FolderCard key={folder.id} folder={folder} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          {folders.map((folder) => (
+            <FolderCard key={folder.$id} folder={folder} />
           ))}
         </div>
       </div>
 
       {/* Recent files */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <h2
-            className="text-base font-semibold"
+            className="text-lg font-semibold"
             style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
           >
             Recent Files
@@ -167,11 +189,7 @@ export default function DashboardPage() {
             View all →
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {RECENT_FILES.map((file) => (
-            <FileCard key={file.id} file={file} view="grid" />
-          ))}
-        </div>
+        <FileManager files={recentFiles} onMutate={fetchRecent} defaultView="grid" showToolbar={false} />
       </div>
     </div>
   );

@@ -51,23 +51,34 @@ export async function registerUser(
   });
 
   // 4. Write registration metadata – document ID = Appwrite user ID
-  const profile = await databases.createDocument<UserProfile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_PROFILES,
-    documentId: user.$id,
-    data: {
-      user_id: user.$id,
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      registered_at: new Date().toISOString(),
-      storage_used: 0,
-      plan: "free",
-    },
-    permissions: [
-      Permission.read(Role.user(user.$id)),
-      Permission.update(Role.user(user.$id)),
-    ],
-  });
+  let profile: UserProfile;
+  try {
+    profile = await databases.createDocument<UserProfile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_PROFILES,
+      documentId: user.$id,
+      data: {
+        user_id: user.$id,
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        registered_at: new Date().toISOString(),
+        storage_used: 0,
+        plan: "free",
+      },
+      permissions: [
+        Permission.read(Role.user(user.$id)),
+        Permission.update(Role.user(user.$id)),
+      ],
+    });
+  } catch (profileErr) {
+    // Roll back the session so user isn't left in a broken state
+    try {
+      await account.deleteSession({ sessionId: "current" });
+    } catch {
+      // ignore cleanup failure
+    }
+    throw profileErr;
+  }
 
   return profile;
 }
@@ -120,4 +131,26 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   } catch {
     return null;
   }
+}
+
+/* ── Update user display name ─────────────────────── */
+
+export async function updateUserName(
+  name: string
+): Promise<Models.User<Models.Preferences>> {
+  return account.updateName({ name });
+}
+
+/* ── Update user profile document ─────────────────── */
+
+export async function updateUserProfile(
+  userId: string,
+  data: { name?: string; email?: string }
+): Promise<UserProfile> {
+  return databases.updateDocument<UserProfile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_PROFILES,
+    documentId: userId,
+    data,
+  });
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@fontsource-variable/outfit";
 import "@fontsource-variable/dm-sans";
 import AppwritePing from "@/components/system/AppwritePing";
+import { AuthProvider } from "@/lib/auth-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,8 +19,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <AppwritePing />
-        {children}
+        <AuthProvider>
+          <AppwritePing />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

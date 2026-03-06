@@ -1,26 +1,39 @@
 "use client";
 
-import { useState } from "react";
-import { BACKUP_FILES, STORAGE_STATS } from "@/lib/mock-data";
+import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { listBackupFiles } from "@/lib/files";
+import { getStorageStats } from "@/lib/storage-stats";
+import type { ParsedVaultFile, StorageStats } from "@/lib/types";
 import StorageBar from "@/components/dashboard/StorageBar";
-import FileGrid from "@/components/dashboard/FileGrid";
+import FileManager from "@/components/dashboard/FileManager";
 
 export default function BackupPage() {
-  const [view, setView] = useState<"grid" | "list">("list");
+  const { user } = useAuth();
+  const [backupFiles, setBackupFiles] = useState<ParsedVaultFile[]>([]);
+  const [stats, setStats] = useState<StorageStats | null>(null);
+
+  const fetchBackup = useCallback(() => {
+    if (!user) return;
+    listBackupFiles(user.$id).then((res) => setBackupFiles(res.files)).catch(() => {});
+    getStorageStats(user.$id).then(setStats).catch(() => {});
+  }, [user]);
+
+  useEffect(() => { fetchBackup(); }, [fetchBackup]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto flex flex-col gap-6">
+    <div className="p-8 max-w-7xl mx-auto flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1
-            className="text-xl font-semibold"
+            className="text-2xl font-semibold"
             style={{ color: "var(--dash-text)", fontFamily: "var(--font-display)" }}
           >
             Backup Vault
           </h1>
           <p className="text-xs mt-0.5" style={{ color: "var(--dash-text-3)" }}>
-            {BACKUP_FILES.length} files backed up
+            {backupFiles.length} files backed up
           </p>
         </div>
       </div>
@@ -31,8 +44,8 @@ export default function BackupPage() {
         style={{ background: "var(--dash-surface)", border: "1px solid var(--dash-border)" }}
       >
         <StorageBar
-          used={STORAGE_STATS.backupUsed}
-          total={STORAGE_STATS.backupTotal}
+          used={stats?.backupUsed ?? 0}
+          total={stats?.backupTotal ?? 1}
           label="Backup Storage"
           showValues
         />
@@ -50,7 +63,7 @@ export default function BackupPage() {
         >
           Backed-up Files
         </h2>
-        <FileGrid files={BACKUP_FILES} view={view} onViewChange={setView} />
+        <FileManager files={backupFiles} onMutate={fetchBackup} defaultView="list" />
       </div>
     </div>
   );

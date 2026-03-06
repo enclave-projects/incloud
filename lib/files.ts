@@ -1,0 +1,294 @@
+import { ID, Query, Permission, Role } from "appwrite";
+import { databases, storage } from "@/lib/appwrite";
+import {
+  APPWRITE_DB_ID,
+  APPWRITE_COLLECTION_FILES,
+  APPWRITE_BUCKET_VAULT,
+} from "@/lib/config";
+import type { VaultFile, ParsedVaultFile } from "@/lib/types";
+import { parseVaultFile, mimeToCategory } from "@/lib/types";
+
+/* ── Upload a file ───────────────────────────────── */
+
+export async function uploadFile(
+  userId: string,
+  file: File,
+  folderId: string,
+  folderPath: string,
+  tags: string[] = [],
+  onProgress?: (percent: number) => void
+): Promise<ParsedVaultFile> {
+  // 1. Upload binary to storage bucket
+  const createParams: Record<string, unknown> = {
+    bucketId: APPWRITE_BUCKET_VAULT,
+    fileId: ID.unique(),
+    file,
+    permissions: [
+      Permission.read(Role.user(userId)),
+      Permission.update(Role.user(userId)),
+      Permission.delete(Role.user(userId)),
+    ],
+  };
+  if (onProgress) {
+    createParams.onProgress = (p: { progress: number }) => onProgress(p.progress);
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stored = await (storage.createFile as any)(createParams);
+
+  // 2. Derive metadata
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const category = mimeToCategory(file.type, ext);
+  const now = new Date().toISOString();
+
+  // 3. Create document in files collection
+  const doc = await databases.createDocument<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    documentId: ID.unique(),
+    data: {
+      user_id: userId,
+      filename: file.name,
+      original_filename: file.name,
+      file_size: file.size,
+      mime_type: file.type || "application/octet-stream",
+      appwrite_file_id: stored.$id,
+      folder_id: folderId,
+      folder_path: folderPath,
+      tags: JSON.stringify(tags),
+      is_backup: false,
+      backup_date: null,
+      upload_date: now,
+      modification_date: now,
+      resolution: "",
+      duration: 0,
+      codec: "",
+      bitrate: 0,
+      color_space: "",
+      frame_rate: 0,
+      category,
+      extension: ext,
+      thumbnail_file_id: "",
+    },
+    permissions: [
+      Permission.read(Role.user(userId)),
+      Permission.update(Role.user(userId)),
+      Permission.delete(Role.user(userId)),
+    ],
+  });
+
+  return parseVaultFile(doc);
+}
+
+/* ── List files ──────────────────────────────────── */
+
+export async function listFiles(
+  userId: string,
+  opts?: {
+    folderId?: string;
+    limit?: number;
+    offset?: number;
+    orderBy?: string;
+    orderDesc?: boolean;
+  }
+): Promise<{ files: ParsedVaultFile[]; total: number }> {
+  const queries: string[] = [
+    Query.equal("user_id", userId),
+    Query.limit(opts?.limit ?? 50),
+    Query.offset(opts?.offset ?? 0),
+  ];
+
+  if (opts?.folderId) {
+    queries.push(Query.equal("folder_id", opts.folderId));
+  }
+
+  if (opts?.orderBy === "name") {
+    queries.push(opts.orderDesc ? Query.orderDesc("filename") : Query.orderAsc("filename"));
+  } else if (opts?.orderBy === "size") {
+    queries.push(opts.orderDesc ? Query.orderDesc("file_size") : Query.orderAsc("file_size"));
+  } else {
+    queries.push(opts?.orderDesc === false ? Query.orderAsc("upload_date") : Query.orderDesc("upload_date"));
+  }
+
+  const res = await databases.listDocuments<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    queries,
+  });
+
+  return {
+    files: res.documents.map(parseVaultFile),
+    total: res.total,
+  };
+}
+
+/* ── List recent files ───────────────────────────── */
+
+export async function listRecentFiles(
+  userId: string,
+  limit = 8
+): Promise<ParsedVaultFile[]> {
+  const res = await databases.listDocuments<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    queries: [
+      Query.equal("user_id", userId),
+      Query.orderDesc("upload_date"),
+      Query.limit(limit),
+    ],
+  });
+  return res.documents.map(parseVaultFile);
+}
+
+/* ── Get single file ─────────────────────────────── */
+
+export async function getFile(fileId: string): Promise<ParsedVaultFile> {
+  const doc = await databases.getDocument<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    documentId: fileId,
+  });
+  return parseVaultFile(doc);
+}
+
+/* ── Update file metadata ────────────────────────── */
+
+export async function updateFile(
+  fileId: string,
+  data: Partial<{
+    filename: string;
+    tags: string[];
+    folder_id: string;
+    folder_path: string;
+    is_backup: boolean;
+    backup_date: string;
+    resolution: string;
+    duration: number;
+    codec: string;
+  }>
+): Promise<ParsedVaultFile> {
+  const payload: Record<string, unknown> = { ...data };
+  if (data.tags !== undefined) {
+    payload.tags = JSON.stringify(data.tags);
+  }
+  payload.modification_date = new Date().toISOString();
+
+  const doc = await databases.updateDocument<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    documentId: fileId,
+    data: payload,
+  });
+  return parseVaultFile(doc);
+}
+
+/* ── Delete file ─────────────────────────────────── */
+
+export async function deleteFile(fileId: string, storageFileId: string): Promise<void> {
+  // Delete from storage
+  try {
+    await storage.deleteFile({ bucketId: APPWRITE_BUCKET_VAULT, fileId: storageFileId });
+  } catch (err) {
+    console.warn("[deleteFile] Storage deletion failed for", storageFileId, err);
+  }
+  // Delete document
+  await databases.deleteDocument({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    documentId: fileId,
+  });
+}
+
+/* ── Toggle backup status ────────────────────────── */
+
+export async function toggleBackup(
+  fileId: string,
+  isBackup: boolean
+): Promise<ParsedVaultFile> {
+  return updateFile(fileId, {
+    is_backup: isBackup,
+    backup_date: isBackup ? new Date().toISOString() : null,
+  });
+}
+
+/* ── List backup files ───────────────────────────── */
+
+export async function listBackupFiles(
+  userId: string
+): Promise<{ files: ParsedVaultFile[]; total: number }> {
+  const res = await databases.listDocuments<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    queries: [
+      Query.equal("user_id", userId),
+      Query.equal("is_backup", true),
+      Query.orderDesc("backup_date"),
+      Query.limit(100),
+    ],
+  });
+  return { files: res.documents.map(parseVaultFile), total: res.total };
+}
+
+/* ── Search files ────────────────────────────────── */
+
+export async function searchFiles(
+  userId: string,
+  opts: {
+    query?: string;
+    categories?: string[];
+    tags?: string[];
+    folderId?: string;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<{ files: ParsedVaultFile[]; total: number }> {
+  const queries: string[] = [
+    Query.equal("user_id", userId),
+    Query.limit(opts.limit ?? 50),
+    Query.offset(opts.offset ?? 0),
+    Query.orderDesc("upload_date"),
+  ];
+
+  if (opts.query) {
+    queries.push(Query.search("filename", opts.query));
+  }
+
+  if (opts.categories && opts.categories.length > 0) {
+    queries.push(Query.equal("category", opts.categories));
+  }
+
+  if (opts.folderId) {
+    queries.push(Query.equal("folder_id", opts.folderId));
+  }
+
+  const res = await databases.listDocuments<VaultFile>({
+    databaseId: APPWRITE_DB_ID,
+    collectionId: APPWRITE_COLLECTION_FILES,
+    queries,
+  });
+
+  let files = res.documents.map(parseVaultFile);
+
+  // Client-side tag filtering (tags stored as JSON string)
+  if (opts.tags && opts.tags.length > 0) {
+    files = files.filter((f) =>
+      opts.tags!.some((t) => f.tags.includes(t))
+    );
+  }
+
+  return { files, total: files.length };
+}
+
+/* ── Get file download URL ───────────────────────── */
+
+const APPWRITE_ENDPOINT = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || "https://appwrite.enclaveprojects.dev/v1";
+const APPWRITE_PROJECT = process.env.NEXT_PUBLIC_APPWRITE_PROJECT || "incloud-enclaveprojects";
+
+export function getFileDownloadUrl(storageFileId: string): string {
+  return `${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_BUCKET_VAULT}/files/${storageFileId}/download?project=${APPWRITE_PROJECT}`;
+}
+
+/* ── Get file preview/view URL ───────────────────── */
+
+export function getFileViewUrl(storageFileId: string): string {
+  return `${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_BUCKET_VAULT}/files/${storageFileId}/view?project=${APPWRITE_PROJECT}`;
+}

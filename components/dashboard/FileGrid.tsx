@@ -2,15 +2,16 @@
 
 import { useState } from "react";
 import FileCard from "@/components/dashboard/FileCard";
-import type { VaultFile } from "@/lib/mock-data";
+import type { ParsedVaultFile } from "@/lib/types";
 
 type SortKey = "name" | "size" | "date";
 
 interface FileGridProps {
-  files: VaultFile[];
+  files: ParsedVaultFile[];
   view: "grid" | "list";
   onViewChange: (v: "grid" | "list") => void;
   showToolbar?: boolean;
+  onFileAction?: (action: string, file: ParsedVaultFile) => void;
 }
 
 export default function FileGrid({
@@ -18,15 +19,16 @@ export default function FileGrid({
   view,
   onViewChange,
   showToolbar = true,
+  onFileAction,
 }: FileGridProps) {
   const [sort, setSort] = useState<SortKey>("date");
   const [asc, setAsc] = useState(false);
 
   const sorted = [...files].sort((a, b) => {
     let cmp = 0;
-    if (sort === "name") cmp = a.name.localeCompare(b.name);
-    else if (sort === "size") cmp = a.size - b.size;
-    else cmp = new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime();
+    if (sort === "name") cmp = a.filename.localeCompare(b.filename);
+    else if (sort === "size") cmp = a.file_size - b.file_size;
+    else cmp = new Date(a.upload_date).getTime() - new Date(b.upload_date).getTime();
     return asc ? cmp : -cmp;
   });
 
@@ -126,15 +128,15 @@ export default function FileGrid({
           <p style={{ color: "var(--dash-text-3)" }}>No files found</p>
         </div>
       ) : view === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {sorted.map((f) => (
-            <FileCard key={f.id} file={f} view="grid" />
+            <FileCard key={f.$id} file={f} view="grid" onAction={onFileAction} />
           ))}
         </div>
       ) : (
         <div className="flex flex-col gap-0.5">
           {sorted.map((f) => (
-            <FileCard key={f.id} file={f} view="list" />
+            <FileCard key={f.$id} file={f} view="list" onAction={onFileAction} />
           ))}
         </div>
       )}

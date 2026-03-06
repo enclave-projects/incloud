@@ -54,7 +54,7 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
               .filter(Boolean)
               .join(" ")}
             style={{ color: "#0F172A", fontSize: "14px" }}
-            aria-invalid={error ? "true" : undefined}
+            aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${inputId}-error` : undefined}
             {...props}
           />

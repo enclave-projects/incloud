@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FormInput from "@/components/ui/FormInput";
 import { loginUser } from "@/lib/auth";
+import { sendSessionAlert } from "@/lib/session-alert";
 
 /* ── Icon helpers ─────────────────────────────────────── */
 function EmailIcon() {
@@ -71,8 +72,6 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const errs = validate(email, password);
@@ -83,8 +82,8 @@ export default function LoginForm() {
     setErrors({});
     setIsLoading(true);
     try {
-      await loginUser(email, password);
-      setSubmitted(true);
+      const user = await loginUser(email, password);
+      sendSessionAlert(user.$id, user.name, user.email, "login");
       router.push("/dashboard");
     } catch (err: unknown) {
       const appErr = err as { code?: number; message?: string; type?: string };
@@ -108,36 +107,6 @@ export default function LoginForm() {
       setIsLoading(false);
     }
   };
-
-  if (submitted) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-6 text-center">
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center"
-          style={{ background: "#EFF6FF" }}
-        >
-          <svg
-            width="26"
-            height="26"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#2563EB"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </div>
-        <p className="font-semibold" style={{ color: "#0F172A" }}>
-          Signed in successfully!
-        </p>
-        <p className="text-sm" style={{ color: "#64748B" }}>
-          Redirecting you to your cloud…
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>

@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import InCloudLogo from "@/components/ui/InCloudLogo";
 import StorageBar from "@/components/dashboard/StorageBar";
-import { STORAGE_STATS, FOLDERS } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { useSidebar } from "@/lib/sidebar-context";
+import { listAllFolders } from "@/lib/folders";
+import { getStorageStats } from "@/lib/storage-stats";
+import type { VaultFolder } from "@/lib/types";
+import type { StorageStats } from "@/lib/types";
 
 /* ── Nav items ─────────────────────────────────────── */
 const NAV_MAIN = [
@@ -44,29 +50,63 @@ const NAV_BOTTOM = [
   },
 ];
 
+const SIDEBAR_EXPANDED = 248;
+const SIDEBAR_COLLAPSED = 64;
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const { collapsed, toggle } = useSidebar();
+  const [folders, setFolders] = useState<VaultFolder[]>([]);
+  const [stats, setStats] = useState<StorageStats | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!user) return;
+    listAllFolders(user.$id).then(setFolders).catch(() => {});
+    getStorageStats(user.$id).then(setStats).catch(() => {});
+  }, [user]);
+
+  const w = collapsed ? SIDEBAR_COLLAPSED : SIDEBAR_EXPANDED;
 
   return (
     <aside
-      className="flex flex-col h-full dash-scroll overflow-y-auto"
+      className="flex flex-col h-full dash-scroll overflow-y-auto overflow-x-hidden"
       style={{
         background: "var(--dash-sidebar)",
         borderRight: "1px solid var(--dash-border)",
-        width: 232,
-        minWidth: 232,
+        width: w,
+        minWidth: w,
+        transition: "width 0.2s ease, min-width 0.2s ease",
       }}
     >
-      {/* Logo */}
-      <div className="px-5 py-5 flex-shrink-0">
-        <InCloudLogo variant="light" size="sm" />
+      {/* Logo + Toggle */}
+      <div className="flex items-center justify-between px-4 py-5 flex-shrink-0" style={{ minHeight: 64 }}>
+        {!collapsed && <InCloudLogo variant="light" size="sm" />}
+        <button
+          onClick={toggle}
+          className="flex items-center justify-center rounded-lg transition-colors hover:opacity-80"
+          style={{
+            width: 32, height: 32,
+            background: "rgba(255,255,255,0.05)",
+            color: "var(--dash-text-2)",
+            margin: collapsed ? "0 auto" : undefined,
+          }}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transition: "transform 0.2s", transform: collapsed ? "rotate(180deg)" : "none" }}>
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </div>
 
       {/* Divider */}
-      <div style={{ height: 1, background: "var(--dash-border)", margin: "0 12px" }} />
+      <div style={{ height: 1, background: "var(--dash-border)", margin: collapsed ? "0 8px" : "0 12px" }} />
 
       {/* Main nav */}
-      <nav className="flex flex-col gap-0.5 px-3 pt-4 flex-1">
+      <nav className="flex flex-col gap-1 px-2 pt-4 flex-1">
         {NAV_MAIN.map((item) => {
           const active = pathname === item.href ||
             (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -74,8 +114,12 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all duration-150 group"
+              title={collapsed ? item.label : undefined}
+              className="flex items-center rounded-xl transition-all duration-150 group"
               style={{
+                gap: collapsed ? 0 : 12,
+                padding: collapsed ? "10px 0" : "10px 14px",
+                justifyContent: collapsed ? "center" : "flex-start",
                 color: active
                   ? "#dde8fa"
                   : item.accent
@@ -84,10 +128,11 @@ export default function Sidebar() {
                 background: active ? "var(--dash-accent-dim)" : "transparent",
                 fontWeight: active ? 500 : 400,
                 fontFamily: "var(--font-display)",
+                fontSize: 14,
               }}
             >
               <svg
-                width="16" height="16" viewBox="0 0 24 24" fill="none"
+                width="18" height="18" viewBox="0 0 24 24" fill="none"
                 stroke={active ? "var(--dash-accent)" : item.accent ? "#fb923c" : "currentColor"}
                 strokeWidth={active ? 2 : 1.75}
                 strokeLinecap="round" strokeLinejoin="round"
@@ -95,72 +140,78 @@ export default function Sidebar() {
               >
                 <path d={item.icon} />
               </svg>
-              {item.label}
-              {item.accent && (
-                <span
-                  className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                  style={{ background: "rgba(251,146,60,0.15)", color: "#fb923c" }}
-                >
-                  10 GB
-                </span>
+              {!collapsed && (
+                <>
+                  <span className="truncate">{item.label}</span>
+                  {item.accent && (
+                    <span
+                      className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                      style={{ background: "rgba(251,146,60,0.15)", color: "#fb923c" }}
+                    >
+                      10 GB
+                    </span>
+                  )}
+                </>
               )}
             </Link>
           );
         })}
 
-        {/* Folders quick-access */}
-        <div className="mt-4 mb-1 px-3">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-widest"
-            style={{ color: "var(--dash-text-3)", letterSpacing: "0.12em" }}
-          >
-            Quick Folders
-          </span>
-        </div>
-        {FOLDERS.slice(0, 5).map((folder) => (
-          <Link
-            key={folder.id}
-            href={`/dashboard/folders?id=${folder.id}`}
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm
-                       transition-colors group"
-            style={{ color: "var(--dash-text-2)" }}
-          >
-            <div
-              className="w-2 h-2 rounded-sm flex-shrink-0"
-              style={{ background: folder.color }}
-            />
-            <span className="truncate text-[13px]">{folder.name}</span>
-            <span
-              className="ml-auto text-[11px] flex-shrink-0"
-              style={{ color: "var(--dash-text-3)" }}
-            >
-              {folder.fileCount}
-            </span>
-          </Link>
-        ))}
+        {/* Folders quick-access — hidden when collapsed */}
+        {!collapsed && folders.length > 0 && (
+          <>
+            <div className="mt-5 mb-1.5 px-3">
+              <span
+                className="text-[10px] font-semibold uppercase tracking-widest"
+                style={{ color: "var(--dash-text-3)", letterSpacing: "0.12em" }}
+              >
+                Quick Folders
+              </span>
+            </div>
+            {folders.slice(0, 5).map((folder) => (
+              <Link
+                key={folder.$id}
+                href={`/dashboard/folders?id=${folder.$id}`}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px]
+                           transition-colors group"
+                style={{ color: "var(--dash-text-2)" }}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                  style={{ background: folder.color }}
+                />
+                <span className="truncate">{folder.folder_name}</span>
+              </Link>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Bottom: storage + settings */}
-      <div className="px-3 pb-4 flex flex-col gap-2 flex-shrink-0">
-        {/* Mini storage bar */}
-        <div
-          className="rounded-xl p-3 flex flex-col gap-2"
-          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--dash-border)" }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px]" style={{ color: "var(--dash-text-2)" }}>Vault</span>
-            <span className="text-[11px] font-medium" style={{ color: "var(--dash-text)" }}>
-              {Math.round((STORAGE_STATS.vaultUsed / STORAGE_STATS.vaultTotal) * 100)}%
-            </span>
+      <div className="px-2 pb-4 flex flex-col gap-2 flex-shrink-0">
+        {/* Mini storage bar — hidden when collapsed */}
+        {!collapsed && (
+          <div
+            className="rounded-xl p-3 flex flex-col gap-2"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--dash-border)" }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px]" style={{ color: "var(--dash-text-2)" }}>Vault</span>
+              <span className="text-[11px] font-medium" style={{ color: "var(--dash-text)" }}>
+                {stats ? Math.round((stats.vaultUsed / stats.vaultTotal) * 100) : 0}%
+              </span>
+            </div>
+            {stats && (
+              <StorageBar
+                used={stats.vaultUsed}
+                total={stats.vaultTotal}
+                label=""
+                showValues={false}
+                height={3}
+              />
+            )}
           </div>
-          <StorageBar
-            used={STORAGE_STATS.vaultUsed}
-            total={STORAGE_STATS.vaultTotal}
-            label=""
-            showValues={false}
-            height={3}
-          />
-        </div>
+        )}
 
         {/* Settings link */}
         {NAV_BOTTOM.map((item) => {
@@ -169,22 +220,51 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all"
+              title={collapsed ? item.label : undefined}
+              className="flex items-center rounded-xl transition-all"
               style={{
+                gap: collapsed ? 0 : 12,
+                padding: collapsed ? "10px 0" : "10px 14px",
+                justifyContent: collapsed ? "center" : "flex-start",
                 color: active ? "#dde8fa" : "var(--dash-text-2)",
                 background: active ? "var(--dash-accent-dim)" : "transparent",
                 fontFamily: "var(--font-display)",
+                fontSize: 14,
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
                 stroke={active ? "var(--dash-accent)" : "currentColor"}
                 strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
                 <path d={item.icon} />
               </svg>
-              {item.label}
+              {!collapsed && <span>{item.label}</span>}
             </Link>
           );
         })}
+
+        {/* Logout button */}
+        <button
+          onClick={async () => { await logout(); router.push("/login"); }}
+          title={collapsed ? "Sign Out" : undefined}
+          className="flex items-center rounded-xl transition-all hover:opacity-80"
+          style={{
+            gap: collapsed ? 0 : 12,
+            padding: collapsed ? "10px 0" : "10px 14px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            color: "#ef4444",
+            background: "transparent",
+            fontFamily: "var(--font-display)",
+            fontSize: 14,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          {!collapsed && <span>Sign Out</span>}
+        </button>
       </div>
     </aside>
   );

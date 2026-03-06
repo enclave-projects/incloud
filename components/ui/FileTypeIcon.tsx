@@ -1,4 +1,4 @@
-import type { FileCategory } from "@/lib/mock-data";
+import type { FileCategory } from "@/lib/types";
 
 interface FileTypeIconProps {
   category: FileCategory;

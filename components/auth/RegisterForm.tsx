@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import FormInput from "@/components/ui/FormInput";
 import { registerUser } from "@/lib/auth";
+import { sendSessionAlert } from "@/lib/session-alert";
 
 /* ── Icon helpers ─────────────────────────────────────── */
 function UserIcon() {
@@ -142,7 +143,8 @@ export default function RegisterForm() {
 
     setIsLoading(true);
     try {
-      await registerUser(name, email, password);
+      const profile = await registerUser(name, email, password);
+      sendSessionAlert(profile.user_id, name, email, "register");
       setSubmitted(true);
       setTimeout(() => router.push("/dashboard"), 1500);
     } catch (err: unknown) {
