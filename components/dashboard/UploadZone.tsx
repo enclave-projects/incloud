@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { uploadFile } from "@/lib/files";
 import { recalculateStorage } from "@/lib/storage-stats";
 import { MAX_UPLOAD_SIZE } from "@/lib/config";
+import { hasResumeEntry, cleanupStaleResumeEntries } from "@/lib/upload-resume";
 
 interface UploadZoneProps {
   compact?: boolean;
@@ -20,6 +21,7 @@ interface PendingFile {
   progress: number;
   done: boolean;
   error?: string;
+  isResuming?: boolean;
 }
 
 function formatSize(bytes: number) {
@@ -34,6 +36,11 @@ export default function UploadZone({ compact = false, folderId = "", folderPath 
   const inputRef = useRef<HTMLInputElement>(null);
   const { user } = useAuth();
 
+  // Remove stale resume entries from previous sessions on mount
+  useEffect(() => {
+    cleanupStaleResumeEntries();
+  }, []);
+
   const handleUpload = useCallback(async (fileList: FileList | null) => {
     if (!fileList || !user) return;
 
@@ -45,6 +52,7 @@ export default function UploadZone({ compact = false, folderId = "", folderPath 
       size: f.size,
       progress: 0,
       done: false,
+      isResuming: hasResumeEntry(f),
     }));
     setFiles((prev) => [...incoming, ...prev]);
 
@@ -203,7 +211,6 @@ export default function UploadZone({ compact = false, folderId = "", folderPath 
                     <svg
                       width="14" height="14" viewBox="0 0 24 24" fill="none"
                       stroke="var(--dash-accent)" strokeWidth="2.5"
-                      className="animate-spin"
                       style={{ animation: "spin 1s linear infinite" }}
                     >
                       <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -212,9 +219,19 @@ export default function UploadZone({ compact = false, folderId = "", folderPath 
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs truncate" style={{ color: "var(--dash-text)" }}>
-                    {f.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs truncate" style={{ color: "var(--dash-text)" }}>
+                      {f.name}
+                    </p>
+                    {f.isResuming && !f.done && !f.error && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0 font-medium"
+                        style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24" }}
+                      >
+                        Resuming
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-1">
                     <div
                       className="flex-1 rounded-full overflow-hidden"
@@ -224,7 +241,7 @@ export default function UploadZone({ compact = false, folderId = "", folderPath 
                         className="h-full rounded-full transition-all"
                         style={{
                           width: `${f.progress}%`,
-                          background: f.error ? "#ef4444" : f.done ? "#34d399" : "var(--dash-accent)",
+                          background: f.error ? "#ef4444" : f.done ? "#34d399" : f.isResuming ? "#fbbf24" : "var(--dash-accent)",
                         }}
                       />
                     </div>

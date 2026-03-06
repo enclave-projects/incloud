@@ -7,6 +7,7 @@ import { listFiles } from "@/lib/files";
 import type { ParsedVaultFile } from "@/lib/types";
 import FileManager from "@/components/dashboard/FileManager";
 import UploadZone from "@/components/dashboard/UploadZone";
+import ErrorBoundary from "@/components/system/ErrorBoundary";
 
 function FilesContent() {
   const [showUpload, setShowUpload] = useState(false);
@@ -77,12 +78,16 @@ function FilesContent() {
               </svg>
             </button>
           </div>
-          <UploadZone onUploadComplete={fetchFiles} />
+          <ErrorBoundary label="Upload Zone">
+            <UploadZone onUploadComplete={fetchFiles} />
+          </ErrorBoundary>
         </div>
       )}
 
       {/* File manager (grid + all modals) */}
-      <FileManager files={files} onMutate={fetchFiles} />
+      <ErrorBoundary label="File Manager">
+        <FileManager files={files} onMutate={fetchFiles} />
+      </ErrorBoundary>
     </div>
   );
 }

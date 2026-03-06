@@ -7,6 +7,7 @@ import { getStorageStats } from "@/lib/storage-stats";
 import type { ParsedVaultFile, StorageStats } from "@/lib/types";
 import StorageBar from "@/components/dashboard/StorageBar";
 import FileManager from "@/components/dashboard/FileManager";
+import ErrorBoundary from "@/components/system/ErrorBoundary";
 
 export default function BackupPage() {
   const { user } = useAuth();
@@ -63,7 +64,9 @@ export default function BackupPage() {
         >
           Backed-up Files
         </h2>
-        <FileManager files={backupFiles} onMutate={fetchBackup} defaultView="list" />
+        <ErrorBoundary label="Backup File Manager">
+          <FileManager files={backupFiles} onMutate={fetchBackup} defaultView="list" />
+        </ErrorBoundary>
       </div>
     </div>
   );

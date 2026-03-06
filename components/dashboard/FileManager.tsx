@@ -11,7 +11,10 @@ import {
   toggleBackup,
   getFileDownloadUrl,
   getFileViewUrl,
+  verifyFileIntegrity,
+  type VerifyResult,
 } from "@/lib/files";
+import { shortChecksum } from "@/lib/checksum";
 import { listAllFolders } from "@/lib/folders";
 import { listTags, createTag, deleteTag as removeTagApi } from "@/lib/tags";
 import { decrementStorage, updateBackupStats } from "@/lib/storage-stats";
@@ -50,6 +53,7 @@ export default function FileManager({
   const [targetFolder, setTargetFolder] = useState("");
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#6b7280");
+  const [verifyState, setVerifyState] = useState<VerifyResult | "idle" | "verifying">("idle");
 
   useEffect(() => {
     if (!user) return;
@@ -61,7 +65,15 @@ export default function FileManager({
     setModal(null);
     setSelected(null);
     setLoading(false);
+    setVerifyState("idle");
   }, []);
+
+  const handleVerify = useCallback(async () => {
+    if (!selected?.checksum || !selected.appwrite_file_id) return;
+    setVerifyState("verifying");
+    const result = await verifyFileIntegrity(selected.appwrite_file_id, selected.checksum);
+    setVerifyState(result);
+  }, [selected]);
 
   const handleAction = useCallback(
     (action: string, file: ParsedVaultFile) => {
@@ -240,6 +252,49 @@ export default function FileManager({
                 </div>
               ))}
             </div>
+
+            {/* Integrity row — only shown for files that have a checksum */}
+            {selected.checksum ? (
+              <div
+                className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-xs"
+                style={{ background: "var(--dash-surface-2)", border: "1px solid var(--dash-border)" }}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span style={{ color: "var(--dash-text-3)", flexShrink: 0 }}>SHA-256:</span>
+                  <span
+                    className="font-mono truncate"
+                    style={{ color: "var(--dash-text-2)" }}
+                    title={selected.checksum}
+                  >
+                    {shortChecksum(selected.checksum)}
+                  </span>
+                  {verifyState === "verified" && (
+                    <span style={{ color: "#34d399", flexShrink: 0 }}>✓ Verified</span>
+                  )}
+                  {verifyState === "mismatch" && (
+                    <span style={{ color: "#ef4444", flexShrink: 0 }}>✗ Mismatch!</span>
+                  )}
+                  {verifyState === "error" && (
+                    <span style={{ color: "#f59e0b", flexShrink: 0 }}>Could not verify</span>
+                  )}
+                </div>
+                <button
+                  onClick={handleVerify}
+                  disabled={verifyState === "verifying"}
+                  className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0 transition-opacity hover:opacity-80 disabled:opacity-50"
+                  style={{ background: "var(--dash-accent)", color: "#fff" }}
+                >
+                  {verifyState === "verifying" ? "Verifying…" : "Verify"}
+                </button>
+              </div>
+            ) : (
+              <div
+                className="text-xs px-3 py-2 rounded-xl"
+                style={{ color: "var(--dash-text-3)", background: "var(--dash-surface-2)", border: "1px solid var(--dash-border)" }}
+              >
+                No checksum — file was uploaded before integrity verification was enabled.
+              </div>
+            )}
             {selected.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {selected.tags.map((t) => (

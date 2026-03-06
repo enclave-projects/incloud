@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { searchFiles } from "@/lib/files";
 import type { FileCategory, ParsedVaultFile } from "@/lib/types";
 import FileManager from "@/components/dashboard/FileManager";
+import ErrorBoundary from "@/components/system/ErrorBoundary";
 
 const ALL_CATEGORIES: FileCategory[] = ["video", "image", "audio", "3d", "doc", "archive", "lut", "unknown"];
 
@@ -124,7 +125,9 @@ function SearchContent() {
           <p className="text-xs mb-4" style={{ color: "var(--dash-text-3)" }}>
             {searching ? "Searching…" : `${results.length} result${results.length !== 1 ? "s" : ""}`}
           </p>
-          <FileManager files={results} onMutate={doSearch} defaultView="list" showToolbar={false} />
+          <ErrorBoundary label="Search Results">
+            <FileManager files={results} onMutate={doSearch} defaultView="list" showToolbar={false} />
+          </ErrorBoundary>
         </div>
       ) : (
         <p className="text-sm" style={{ color: "var(--dash-text-3)" }}>

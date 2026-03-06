@@ -7,6 +7,9 @@ import {
 } from "@/lib/config";
 import type { VaultFile, ParsedVaultFile } from "@/lib/types";
 import { parseVaultFile, mimeToCategory } from "@/lib/types";
+import { withRetry } from "@/lib/retry";
+import { computeChecksum, verifyChecksum, type VerifyResult } from "@/lib/checksum";
+import { getOrCreateResumeFileId, clearResumeFileId } from "@/lib/upload-resume";
 
 /* ── Upload a file ───────────────────────────────── */
 
@@ -18,10 +21,16 @@ export async function uploadFile(
   tags: string[] = [],
   onProgress?: (percent: number) => void
 ): Promise<ParsedVaultFile> {
-  // 1. Upload binary to storage bucket
+  // 0. Compute SHA-256 before upload so we have the original bytes
+  const checksum = await computeChecksum(file).catch(() => "");
+
+  // 1. Get a stable fileId for this file (enables TUS resume on retry)
+  const { fileId } = getOrCreateResumeFileId(file);
+
+  // 2. Upload binary to storage bucket (Appwrite auto-chunks files > 5 MB via TUS)
   const createParams: Record<string, unknown> = {
     bucketId: APPWRITE_BUCKET_VAULT,
-    fileId: ID.unique(),
+    fileId,
     file,
     permissions: [
       Permission.read(Role.user(userId)),
@@ -32,8 +41,21 @@ export async function uploadFile(
   if (onProgress) {
     createParams.onProgress = (p: { progress: number }) => onProgress(p.progress);
   }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stored = await (storage.createFile as any)(createParams);
+  let stored: { $id: string };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    stored = await (storage.createFile as any)(createParams);
+  } catch (err) {
+    // 409 = file was fully uploaded in a previous attempt but DB write failed.
+    // Recover the existing storage file and proceed to (re)create the DB document.
+    if (err && typeof err === "object" && (err as { code?: number }).code === 409) {
+      stored = await storage.getFile({ bucketId: APPWRITE_BUCKET_VAULT, fileId });
+    } else {
+      throw err;
+    }
+  }
 
   // 2. Derive metadata
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -68,6 +90,7 @@ export async function uploadFile(
       category,
       extension: ext,
       thumbnail_file_id: "",
+      checksum,
     },
     permissions: [
       Permission.read(Role.user(userId)),
@@ -75,6 +98,9 @@ export async function uploadFile(
       Permission.delete(Role.user(userId)),
     ],
   });
+
+  // Clear resume entry — both storage upload and DB write succeeded
+  clearResumeFileId(file);
 
   return parseVaultFile(doc);
 }
@@ -109,11 +135,13 @@ export async function listFiles(
     queries.push(opts?.orderDesc === false ? Query.orderAsc("upload_date") : Query.orderDesc("upload_date"));
   }
 
-  const res = await databases.listDocuments<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    queries,
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      queries,
+    })
+  );
 
   return {
     files: res.documents.map(parseVaultFile),
@@ -127,26 +155,30 @@ export async function listRecentFiles(
   userId: string,
   limit = 8
 ): Promise<ParsedVaultFile[]> {
-  const res = await databases.listDocuments<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    queries: [
-      Query.equal("user_id", userId),
-      Query.orderDesc("upload_date"),
-      Query.limit(limit),
-    ],
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      queries: [
+        Query.equal("user_id", userId),
+        Query.orderDesc("upload_date"),
+        Query.limit(limit),
+      ],
+    })
+  );
   return res.documents.map(parseVaultFile);
 }
 
 /* ── Get single file ─────────────────────────────── */
 
 export async function getFile(fileId: string): Promise<ParsedVaultFile> {
-  const doc = await databases.getDocument<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    documentId: fileId,
-  });
+  const doc = await withRetry(() =>
+    databases.getDocument<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      documentId: fileId,
+    })
+  );
   return parseVaultFile(doc);
 }
 
@@ -172,12 +204,14 @@ export async function updateFile(
   }
   payload.modification_date = new Date().toISOString();
 
-  const doc = await databases.updateDocument<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    documentId: fileId,
-    data: payload,
-  });
+  const doc = await withRetry(() =>
+    databases.updateDocument<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      documentId: fileId,
+      data: payload,
+    })
+  );
   return parseVaultFile(doc);
 }
 
@@ -191,11 +225,13 @@ export async function deleteFile(fileId: string, storageFileId: string): Promise
     console.warn("[deleteFile] Storage deletion failed for", storageFileId, err);
   }
   // Delete document
-  await databases.deleteDocument({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    documentId: fileId,
-  });
+  await withRetry(() =>
+    databases.deleteDocument({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      documentId: fileId,
+    })
+  );
 }
 
 /* ── Toggle backup status ────────────────────────── */
@@ -215,16 +251,18 @@ export async function toggleBackup(
 export async function listBackupFiles(
   userId: string
 ): Promise<{ files: ParsedVaultFile[]; total: number }> {
-  const res = await databases.listDocuments<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    queries: [
-      Query.equal("user_id", userId),
-      Query.equal("is_backup", true),
-      Query.orderDesc("backup_date"),
-      Query.limit(100),
-    ],
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      queries: [
+        Query.equal("user_id", userId),
+        Query.equal("is_backup", true),
+        Query.orderDesc("backup_date"),
+        Query.limit(100),
+      ],
+    })
+  );
   return { files: res.documents.map(parseVaultFile), total: res.total };
 }
 
@@ -260,11 +298,13 @@ export async function searchFiles(
     queries.push(Query.equal("folder_id", opts.folderId));
   }
 
-  const res = await databases.listDocuments<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    queries,
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      queries,
+    })
+  );
 
   let files = res.documents.map(parseVaultFile);
 
@@ -292,3 +332,15 @@ export function getFileDownloadUrl(storageFileId: string): string {
 export function getFileViewUrl(storageFileId: string): string {
   return `${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_BUCKET_VAULT}/files/${storageFileId}/view?project=${APPWRITE_PROJECT}`;
 }
+
+/* ── Verify file integrity against stored checksum ── */
+
+export async function verifyFileIntegrity(
+  storageFileId: string,
+  storedChecksum: string
+): Promise<VerifyResult> {
+  const url = getFileViewUrl(storageFileId);
+  return verifyChecksum(url, storedChecksum);
+}
+
+export type { VerifyResult };

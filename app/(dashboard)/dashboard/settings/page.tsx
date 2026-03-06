@@ -277,6 +277,35 @@ export default function SettingsPage() {
               </span>
             ),
           },
+          {
+            label: "System Status",
+            description: "Check live service health and uptime",
+            control: (
+              <a
+                href="/statusofapp"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-opacity hover:opacity-80"
+                style={{
+                  background: "var(--dash-surface-2)",
+                  color: "var(--dash-accent)",
+                  border: "1px solid var(--dash-border)",
+                }}
+              >
+                <span
+                  className="inline-block w-1.5 h-1.5 rounded-full"
+                  style={{ background: "var(--dash-accent)" }}
+                />
+                View Status
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </a>
+            ),
+          },
         ]}
       />
     </div>

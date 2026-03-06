@@ -6,6 +6,7 @@ import {
   APPWRITE_COLLECTION_FILES,
 } from "@/lib/config";
 import type { VaultFolder, VaultFile, FolderWithStats } from "@/lib/types";
+import { withRetry } from "@/lib/retry";
 
 /* ── Create folder ───────────────────────────────── */
 
@@ -20,24 +21,26 @@ export async function createFolder(
     ? `${parentPath}/${folderName.replace(/\s+/g, "_")}`
     : `/${folderName.replace(/\s+/g, "_")}`;
 
-  return databases.createDocument<VaultFolder>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    documentId: ID.unique(),
-    data: {
-      user_id: userId,
-      folder_name: folderName,
-      parent_folder_id: parentFolderId,
-      full_path: fullPath,
-      color,
-      created_date: new Date().toISOString(),
-    },
-    permissions: [
-      Permission.read(Role.user(userId)),
-      Permission.update(Role.user(userId)),
-      Permission.delete(Role.user(userId)),
-    ],
-  });
+  return withRetry(() =>
+    databases.createDocument<VaultFolder>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FOLDERS,
+      documentId: ID.unique(),
+      data: {
+        user_id: userId,
+        folder_name: folderName,
+        parent_folder_id: parentFolderId,
+        full_path: fullPath,
+        color,
+        created_date: new Date().toISOString(),
+      },
+      permissions: [
+        Permission.read(Role.user(userId)),
+        Permission.update(Role.user(userId)),
+        Permission.delete(Role.user(userId)),
+      ],
+    })
+  );
 }
 
 /* ── List folders ────────────────────────────────── */
@@ -58,37 +61,43 @@ export async function listFolders(
     queries.push(Query.equal("parent_folder_id", ""));
   }
 
-  const res = await databases.listDocuments<VaultFolder>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    queries,
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFolder>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FOLDERS,
+      queries,
+    })
+  );
   return res.documents;
 }
 
 /* ── List all folders (flat) ─────────────────────── */
 
 export async function listAllFolders(userId: string): Promise<VaultFolder[]> {
-  const res = await databases.listDocuments<VaultFolder>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    queries: [
-      Query.equal("user_id", userId),
-      Query.orderAsc("folder_name"),
-      Query.limit(200),
-    ],
-  });
+  const res = await withRetry(() =>
+    databases.listDocuments<VaultFolder>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FOLDERS,
+      queries: [
+        Query.equal("user_id", userId),
+        Query.orderAsc("folder_name"),
+        Query.limit(200),
+      ],
+    })
+  );
   return res.documents;
 }
 
 /* ── Get folder ──────────────────────────────────── */
 
 export async function getFolder(folderId: string): Promise<VaultFolder> {
-  return databases.getDocument<VaultFolder>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    documentId: folderId,
-  });
+  return withRetry(() =>
+    databases.getDocument<VaultFolder>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FOLDERS,
+      documentId: folderId,
+    })
+  );
 }
 
 /* ── Update folder ───────────────────────────────── */
@@ -105,52 +114,62 @@ export async function updateFolder(
       current.full_path.lastIndexOf("/")
     );
     const newFullPath = `${parentPath}/${data.folder_name.replace(/\s+/g, "_")}`;
-    return databases.updateDocument<VaultFolder>({
+    return withRetry(() =>
+      databases.updateDocument<VaultFolder>({
+        databaseId: APPWRITE_DB_ID,
+        collectionId: APPWRITE_COLLECTION_FOLDERS,
+        documentId: folderId,
+        data: { ...data, full_path: newFullPath },
+      })
+    );
+  }
+
+  return withRetry(() =>
+    databases.updateDocument<VaultFolder>({
       databaseId: APPWRITE_DB_ID,
       collectionId: APPWRITE_COLLECTION_FOLDERS,
       documentId: folderId,
-      data: { ...data, full_path: newFullPath },
-    });
-  }
-
-  return databases.updateDocument<VaultFolder>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    documentId: folderId,
-    data,
-  });
+      data,
+    })
+  );
 }
 
 /* ── Delete folder ───────────────────────────────── */
 
 export async function deleteFolder(folderId: string): Promise<void> {
   // Clear folder_id on all child files so they don't hold stale references
-  const childFiles = await databases.listDocuments<VaultFile>({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FILES,
-    queries: [
-      Query.equal("folder_id", folderId),
-      Query.select(["$id"]),
-      Query.limit(500),
-    ],
-  });
+  const childFiles = await withRetry(() =>
+    databases.listDocuments<VaultFile>({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FILES,
+      queries: [
+        Query.equal("folder_id", folderId),
+        Query.select(["$id"]),
+        Query.limit(500),
+      ],
+    })
+  );
 
   await Promise.all(
     childFiles.documents.map((f) =>
-      databases.updateDocument({
-        databaseId: APPWRITE_DB_ID,
-        collectionId: APPWRITE_COLLECTION_FILES,
-        documentId: f.$id,
-        data: { folder_id: "", folder_path: "/" },
-      })
+      withRetry(() =>
+        databases.updateDocument({
+          databaseId: APPWRITE_DB_ID,
+          collectionId: APPWRITE_COLLECTION_FILES,
+          documentId: f.$id,
+          data: { folder_id: "", folder_path: "/" },
+        })
+      )
     )
   );
 
-  await databases.deleteDocument({
-    databaseId: APPWRITE_DB_ID,
-    collectionId: APPWRITE_COLLECTION_FOLDERS,
-    documentId: folderId,
-  });
+  await withRetry(() =>
+    databases.deleteDocument({
+      databaseId: APPWRITE_DB_ID,
+      collectionId: APPWRITE_COLLECTION_FOLDERS,
+      documentId: folderId,
+    })
+  );
 }
 
 /* ── Get folders with file stats ─────────────────── */
@@ -163,16 +182,18 @@ export async function listFoldersWithStats(
   // Fetch file counts/sizes per folder
   const withStats: FolderWithStats[] = await Promise.all(
     folders.map(async (folder) => {
-      const res = await databases.listDocuments<VaultFile>({
-        databaseId: APPWRITE_DB_ID,
-        collectionId: APPWRITE_COLLECTION_FILES,
-        queries: [
-          Query.equal("user_id", userId),
-          Query.equal("folder_id", folder.$id),
-          Query.select(["file_size"]),
-          Query.limit(5000),
-        ],
-      });
+      const res = await withRetry(() =>
+        databases.listDocuments<VaultFile>({
+          databaseId: APPWRITE_DB_ID,
+          collectionId: APPWRITE_COLLECTION_FILES,
+          queries: [
+            Query.equal("user_id", userId),
+            Query.equal("folder_id", folder.$id),
+            Query.select(["file_size"]),
+            Query.limit(5000),
+          ],
+        })
+      );
       const totalSize = res.documents.reduce(
         (sum, f) => sum + (f.file_size || 0),
         0

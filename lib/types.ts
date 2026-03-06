@@ -37,6 +37,7 @@ export interface VaultFile extends Models.Document {
   category: FileCategory;
   extension: string;
   thumbnail_file_id: string;
+  checksum: string; // SHA-256 hex digest, empty string for files uploaded before this feature
 }
 
 /* ── Vault Folder (Appwrite document) ────────────── */

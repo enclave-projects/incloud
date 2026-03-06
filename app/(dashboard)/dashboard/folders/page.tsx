@@ -8,6 +8,7 @@ import type { FolderWithStats, ParsedVaultFile } from "@/lib/types";
 import FolderCard from "@/components/dashboard/FolderCard";
 import FileManager from "@/components/dashboard/FileManager";
 import Modal from "@/components/ui/Modal";
+import ErrorBoundary from "@/components/system/ErrorBoundary";
 import { useSearchParams } from "next/navigation";
 
 const FOLDER_COLORS = [
@@ -147,7 +148,9 @@ function FoldersContent() {
             </span>
           </div>
           {folderFiles.length > 0 ? (
-            <FileManager files={folderFiles} onMutate={() => { fetchFolderFiles(); fetchFolders(); }} />
+            <ErrorBoundary label="Folder File Manager">
+              <FileManager files={folderFiles} onMutate={() => { fetchFolderFiles(); fetchFolders(); }} />
+            </ErrorBoundary>
           ) : (
             <p className="text-sm" style={{ color: "var(--dash-text-3)" }}>
               No files in this folder yet.

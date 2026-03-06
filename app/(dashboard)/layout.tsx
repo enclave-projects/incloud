@@ -1,6 +1,8 @@
 import Sidebar from "@/components/dashboard/Sidebar";
 import TopBar from "@/components/dashboard/TopBar";
 import AuthGuard from "@/components/system/AuthGuard";
+import ErrorBoundary from "@/components/system/ErrorBoundary";
+import HealthBanner from "@/components/system/HealthBanner";
 import { SidebarProvider } from "@/lib/sidebar-context";
 import MobileBlock from "@/components/system/MobileBlock";
 
@@ -20,8 +22,11 @@ export default function DashboardLayout({
           <Sidebar />
           <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
             <TopBar />
+            <HealthBanner />
             <main className="flex-1 overflow-y-auto dash-scroll">
-              {children}
+              <ErrorBoundary label="Page">
+                {children}
+              </ErrorBoundary>
             </main>
           </div>
         </div>
