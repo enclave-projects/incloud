@@ -330,6 +330,7 @@ export default function FileManager({
       <Modal open={modal === "rename"} onClose={closeModal} title="Rename File">
         <div className="flex flex-col gap-4">
           <input
+            aria-label="New file name"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
@@ -489,6 +490,7 @@ export default function FileManager({
               </p>
               <div className="flex gap-2 items-center">
                 <input
+                  aria-label="New tag name"
                   value={newTagName}
                   onChange={(e) => setNewTagName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleCreateTag(); }}

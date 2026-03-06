@@ -21,8 +21,7 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
       <div className="flex flex-col gap-1.5">
         <label
           htmlFor={inputId}
-          className="text-sm font-medium"
-          style={{ color: "#374151" }}
+          className="text-sm font-medium text-gray-700"
         >
           {label}
         </label>
@@ -30,8 +29,9 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
         <div className="relative">
           {icon && (
             <span
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center"
-              style={{ color: error ? "#F87171" : "#9CA3AF" }}
+              className={`absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center ${
+                error ? "text-red-400" : "text-gray-400"
+              }`}
             >
               {icon}
             </span>
@@ -53,8 +53,8 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
             ]
               .filter(Boolean)
               .join(" ")}
-            style={{ color: "#0F172A", fontSize: "14px" }}
-            aria-invalid={error ? true : undefined}
+            className={[className ?? "", "text-slate-900"].join(" ")}
+            aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : undefined}
             {...props}
           />
@@ -64,9 +64,8 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded p-0.5
-                         transition-colors hover:text-slate-600 focus:outline-none
+                         transition-colors text-gray-400 hover:text-slate-600 focus:outline-none
                          focus-visible:ring-2 focus-visible:ring-blue-500"
-              style={{ color: "#9CA3AF" }}
               aria-label={showPassword ? "Hide password" : "Show password"}
               tabIndex={-1}
             >
@@ -110,8 +109,7 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
         {error && (
           <p
             id={`${inputId}-error`}
-            className="text-xs flex items-center gap-1"
-            style={{ color: "#EF4444" }}
+            className="text-xs flex items-center gap-1 text-red-500"
             role="alert"
           >
             <svg
