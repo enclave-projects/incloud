@@ -2,7 +2,7 @@
 
 A modern, secure, and reliable private cloud storage application built with **Next.js 16.1**, **React 19**, **TypeScript**, and **Appwrite** backend. InCloud provides a user-friendly interface for managing files, folders, and backups with enterprise-grade reliability and security features.
 
-![InCloud Status](https://img.shields.io/badge/status-production-ready-brightgreen)
+![InCloud Status](https://incloud.enclaveprojects.dev/statusofapp)
 ![Next.js](https://img.shields.io/badge/Next.js-16.1.6-black?logo=next.js)
 ![React](https://img.shields.io/badge/React-19-blue?logo=react)
 ![License](https://img.shields.io/badge/license-MIT-green)
