@@ -4,6 +4,7 @@ import {
   APPWRITE_DB_ID,
   APPWRITE_COLLECTION_FILES,
   APPWRITE_BUCKET_VAULT,
+  APPWRITE_BUCKET_THUMBNAILS,
 } from "@/lib/config";
 import type { VaultFile, ParsedVaultFile } from "@/lib/types";
 import { parseVaultFile, mimeToCategory } from "@/lib/types";
@@ -331,6 +332,12 @@ export function getFileDownloadUrl(storageFileId: string): string {
 
 export function getFileViewUrl(storageFileId: string): string {
   return `${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_BUCKET_VAULT}/files/${storageFileId}/view?project=${APPWRITE_PROJECT}`;
+}
+
+/* ── Get thumbnail URL from thumbnails bucket ────── */
+
+export function getThumbnailUrl(thumbnailFileId: string): string {
+  return `${APPWRITE_ENDPOINT}/storage/buckets/${APPWRITE_BUCKET_THUMBNAILS}/files/${thumbnailFileId}/view?project=${APPWRITE_PROJECT}`;
 }
 
 /* ── Verify file integrity against stored checksum ── */

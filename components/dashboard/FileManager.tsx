@@ -11,6 +11,7 @@ import {
   toggleBackup,
   getFileDownloadUrl,
   getFileViewUrl,
+  getThumbnailUrl,
   verifyFileIntegrity,
   type VerifyResult,
 } from "@/lib/files";
@@ -222,7 +223,12 @@ export default function FileManager({
               {isImage ? (
                 <img src={previewUrl} alt={selected.filename} className="max-w-full max-h-[60vh] object-contain" />
               ) : isVideo ? (
-                <video src={previewUrl} controls className="max-w-full max-h-[60vh]" />
+                <video
+                  src={previewUrl}
+                  controls
+                  className="max-w-full max-h-[60vh]"
+                  poster={selected.thumbnail_file_id ? getThumbnailUrl(selected.thumbnail_file_id) : undefined}
+                />
               ) : isAudio ? (
                 <div className="p-8 flex flex-col items-center gap-4 w-full">
                   <FileTypeIcon category="audio" size={48} />

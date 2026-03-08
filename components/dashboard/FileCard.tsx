@@ -5,6 +5,7 @@ import FileTypeIcon from "@/components/ui/FileTypeIcon";
 import Badge from "@/components/ui/Badge";
 import type { ParsedVaultFile } from "@/lib/types";
 import { formatBytes, formatDate, formatDuration } from "@/lib/format";
+import { getThumbnailUrl } from "@/lib/files";
 
 interface FileCardProps {
   file: ParsedVaultFile;
@@ -153,10 +154,19 @@ function GridCard({
     >
       {/* Thumbnail area */}
       <div
-        className="relative flex items-center justify-center"
+        className="relative flex items-center justify-center overflow-hidden"
         style={{ height: 140, background: "rgba(0,0,0,0.2)" }}
       >
-        <FileTypeIcon category={file.category} size={32} />
+        {file.thumbnail_file_id ? (
+          <img
+            src={getThumbnailUrl(file.thumbnail_file_id)}
+            alt={file.filename}
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <FileTypeIcon category={file.category} size={32} />
+        )}
 
         {/* Backup badge */}
         {file.is_backup && (
