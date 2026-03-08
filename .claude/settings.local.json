@@ -1,10 +1,12 @@
 {
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
-      "BypassPermissions"
+      "BypassPermissions",
+      "Bash(vercel:*)"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "vercel-skills@vercel-marketplace": true
   }
 }

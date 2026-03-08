@@ -78,7 +78,7 @@ export async function uploadFile(
       folder_path: folderPath,
       tags: JSON.stringify(tags),
       is_backup: false,
-      backup_date: null,
+      backup_date: "",
       upload_date: now,
       modification_date: now,
       resolution: "",
@@ -242,7 +242,7 @@ export async function toggleBackup(
 ): Promise<ParsedVaultFile> {
   return updateFile(fileId, {
     is_backup: isBackup,
-    backup_date: isBackup ? new Date().toISOString() : null,
+    backup_date: isBackup ? new Date().toISOString() : undefined,
   });
 }
 

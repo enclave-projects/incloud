@@ -42,7 +42,7 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
             id={inputId}
             type={inputType}
             className={[
-              "auth-input w-full rounded-xl border text-sm",
+              "auth-input w-full rounded-xl border text-sm text-slate-900",
               "px-4 py-3.5 transition-colors",
               icon ? "pl-10" : "",
               isPassword ? "pr-11" : "",
@@ -53,7 +53,6 @@ const FormInput = forwardRef<HTMLInputElement, FormInputProps>(
             ]
               .filter(Boolean)
               .join(" ")}
-            className={[className ?? "", "text-slate-900"].join(" ")}
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : undefined}
             {...props}
